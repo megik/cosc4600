@@ -1,103 +1,210 @@
 package ai_8puzzle;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 
 public class HillClimbRandomRestart {
-	private static HashSet<String> triedStates = new HashSet<>();
+	public static final int FIRST_CHOICE = 0, RANDOM_CHOICE = 1, STEEPEST_CHOICE = 2;
+	private static final ArrayList<HashSet<Integer[]>> triedStateList = new ArrayList<>();
+	private static HashSet<Integer[]> firstChoiceStates = new HashSet<>(), randomStates = new HashSet<>(),
+			steepestStates = new HashSet<>();
 	public static final Integer[] GOAL = new Integer[] { 0, 1, 2, 3, 4, 5, 6, 7, 8 };
-	private static double bestScore = 100;
-	private static Integer[] bestBoard = null;
 
 	public static void main(String[] args) {
-		// TODO Auto-generated method stub
-		Integer[] board = Utils.createPuzzle();
-		System.out.println(Utils.board2String(board));
-		for (int i = 0; i < 9; i++) {
-			int[] coords = Utils.index2Coords(i);
-			System.out.printf("%d -> (%d,%d)\n", i, coords[0], coords[1]);
+		triedStateList.add(firstChoiceStates);
+		triedStateList.add(randomStates);
+		triedStateList.add(steepestStates);
+
+		if (calcSuccess(RANDOM_CHOICE, GOAL) != 0) {
+			throw new RuntimeException(
+					String.format("Fitness function broken. Goal state = %.2f", calcSuccess(RANDOM_CHOICE, GOAL)));
 		}
-		if (calcSuccess(GOAL) != 0) {
-			throw new RuntimeException(String.format("Fitness function broken. Goal state = %.2f", calcSuccess(GOAL)));
-		}
-		bestScore = 100;
-		bestBoard = null;
-		// System.out.println(calcSuccess(new Integer[] { 0, 1, 2, 3, 4, 5, 6, 7, 8 }));
-		// System.out.println(calcSuccess(board));
-		try {
-			System.out.println(hillClimb(board));
-		} catch (StackOverflowError soe) {
-			System.err.println("Stack Overflow Exception!");
+		for (HashSet<Integer[]> set : triedStateList) {
+			set.clear();
 		}
 
-		System.out.printf("Best Board (%.2f):\n%s\n", bestScore,
-				bestBoard == null ? "NULL" : Utils.board2String(bestBoard));
+		int TOTAL_RUNS = 100;
+		for (int i = 0; i < TOTAL_RUNS; i++) {
+			Integer[] board = Utils.createPuzzle();
+			RunResult randomResult = hillClimbRandom(new RunResult(RANDOM_CHOICE, board));
+			RunResult firstChoiceResult = hillClimbFirstChoice(new RunResult(FIRST_CHOICE, board));
+			// Uncomment when steepest ascent method is complete
+			// RunResult steepestAscentResult = hillClimbSteepestAscent(new
+			// RunResult(STEEPEST_CHOICE, board));
+
+			if (!randomResult.isSolved()) {
+				throw new RuntimeException("Not solved - Random");
+			}
+
+			System.out.printf("%5d | %5d(%.2f) -> %s\n", randomResult.getRuns(), firstChoiceResult.getRuns(),
+					calcSuccess(FIRST_CHOICE, firstChoiceResult.getBoard()), "");
+		}
 
 	}
 
 	/**
-	 * Calculate average distance to correct position for each tile on the board
+	 * Calculate average distance to correct position for each tile on the board. I
+	 * guess this is called the Manhattan distance?
 	 * 
 	 * @param board
 	 * @return average distance - lower is better
 	 */
-	public static double calcSuccess(Integer[] board) {
+	public static double calcSuccess(int type, Integer[] board) {
+		if (board == null) {
+			return 1000;
+		}
 		double sum = 0;
 
-		for (int index = 0; index < board.length; index++) {
-			int i = index;
-			if (board[i] == 0) {
-				i--;
-				continue;
-			}
+		if (!Utils.checkSolvable(board)) {
+			throw new RuntimeException("BOARD SOMEHOW NOT SOLVABLE");
+		}
+		for (int i = 0; i < board.length; i++) {
 			int[] currCoords = Utils.index2Coords(i);
 			int[] destCoords = Utils.index2Coords(board[i]);
-			double deltaX = Math.pow((currCoords[0] + 0.0) - destCoords[0], 2);
-			double deltaY = Math.pow((currCoords[1] + 0.0) - destCoords[1], 2);
-			double dist = Math.sqrt(deltaX + deltaY);
-			System.out.printf("%d(%d): (%d,%d) -> (%d,%d) = %.2f\n", i, board[i], currCoords[0], currCoords[1],
-					destCoords[0], destCoords[1], dist);
-			sum += dist;
-
+			int moveX = Math.abs(destCoords[0] - currCoords[0]);
+			int moveY = Math.abs(destCoords[1] - currCoords[1]);
+			sum += moveX + moveY;
 		}
-		double retVal = sum / (board.length - 1.0);
-		if (retVal < bestScore) {
-			bestScore = retVal;
-			bestBoard = Utils.copyBoard(board);
-		}
-		return retVal;
+		return sum + (triedStateList.get(type).contains(board) ? 100 : 0);
 	}
 
-	public static Integer[] hillClimb(Integer[] board) {
-		double success = calcSuccess(board);
-		if (success == 0) {
-			return board;
-		}
+	private static double calcSuccess(RunResult result) {
+		return calcSuccess(result.type, result.getBoard());
+	}
 
-		triedStates.add(Utils.board2String(board));
-		double bestScore = 100;
-		Integer[] bestBoard = null;
-		Integer[][] neighbors = Utils.getAllNeighborStates(board);
-		int tried = 0;
-		for (Integer[] neighbor : neighbors) {
+	/**
+	 * Uses hill climb with first choice approach to solve 8 puzzle
+	 * 
+	 * @param node
+	 * @return
+	 */
+	public static RunResult hillClimbFirstChoice(RunResult node) {
+		double score = calcSuccess(node);
+		if (score == 0) {
+			node.complete();
+			return node;
+		}
+		triedStateList.get(node.type).add(node.getBoard());
+		Integer[] current = node.getBoard();
+		for (int i = 0; i < 4; i++) {
+			Integer[] neighbor = Utils.getNeighbor(current, i);
 			if (neighbor == null) {
 				continue;
 			}
-			if (triedStates.contains(Utils.board2String(neighbor))) {
+			if (triedStateList.get(node.type).contains(neighbor)) {
 				continue;
 			}
-			double newScore = calcSuccess(hillClimb(neighbor));
-			if (newScore <= bestScore) {
-				bestScore = newScore;
-				bestBoard = Utils.copyBoard(neighbor);
+			double newScore = calcSuccess(node.type, neighbor);
+			if (newScore < score) {
+				current = neighbor;
+				break;
 			}
-			// triedStates.add(neighbor);
-			tried++;
 		}
-		if (tried == 0 || success < bestScore) {
-			return board;
+		if (current != node.getBoard()) {
+			return hillClimbFirstChoice(node.newBranch(current));
 		}
-		return hillClimb(bestBoard);
 
+		return node;
 	}
 
+	/**
+	 * Uses hill climb steepest ascent approach to solve 8 puzzle
+	 * 
+	 * @param node
+	 * @return
+	 */
+	public static RunResult hillClimbSteepestAscent(RunResult node) {
+		// FIXME: This function is not complete!!!!
+		double score = calcSuccess(node);
+		if (score == 0) {
+			node.complete();
+			return node;
+		}
+		triedStateList.get(node.type).add(node.getBoard());
+		Integer[] current = node.getBoard();
+		while (true) {
+			for (int i = 0; i < 4; i++) {
+				Integer[] neighbor = Utils.getNeighbor(current, i);
+				if (neighbor == null) {
+					continue;
+				}
+			}
+		}
+	}
+
+	/**
+	 * Uses hill climb with random restart to solve 8 puzzle
+	 * 
+	 * @param node
+	 * @return
+	 */
+	public static RunResult hillClimbRandom(RunResult node) {
+		double score = calcSuccess(node);
+		triedStateList.get(RANDOM_CHOICE).add(node.getBoard());
+		if (score == 0) {
+			return node.complete();
+		}
+
+		Integer[] nextBoard = Utils.getRandomNeighbor(node.getBoard());
+		double newScore = calcSuccess(node.type, nextBoard);
+		if (newScore <= score) {
+			return hillClimbRandom(node.newBranch(nextBoard));
+		}
+		return hillClimbRandom(node);
+	}
+
+}
+
+class RunResult {
+	private long runs = 0;
+	public final int type;
+	private Integer[] board;
+	private final long startTime;
+	private long endTime = -1;
+	private boolean isSolved = false;
+
+	public RunResult(int type, Integer[] board) {
+		this.type = type;
+		this.board = Utils.copyBoard(board);
+		this.startTime = System.currentTimeMillis();
+	}
+
+	public RunResult newBranch(Integer[] board) {
+		this.board = board;
+		runs++;
+		return this;
+	}
+
+	public boolean isSolved() {
+		return Utils.isSolved(board);
+	}
+
+	public long getRuns() {
+		return !isSolved ? -1 : runs;
+	}
+
+	public RunResult complete() {
+		if (endTime == -1) {
+			endTime = System.currentTimeMillis();
+			isSolved = this.isSolved();
+		} else {
+			throw new IllegalStateException("complete() can only be called once!");
+		}
+		return this;
+	}
+
+	public long runTime() {
+		if (endTime == -1) {
+			return -1;
+		}
+		return endTime - startTime;
+	}
+
+	public Integer[] getBoard() {
+		return board;
+	}
+
+	public boolean solvable() {
+		return Utils.checkSolvable(board);
+	}
 }

@@ -10,6 +10,7 @@ import java.util.Random;
  *
  */
 public class Utils {
+	public static final Random rng = new Random();
 
 	/**
 	 * Creates a new unique 8 puzzle that is solvable then will set the initial and
@@ -19,8 +20,8 @@ public class Utils {
 		boolean canSolve = false;
 		Integer[] board = new Integer[9];
 		Arrays.fill(board, -1);
-		int numFailed = 0;
-		int emptyPosition = 0;
+		// int numFailed = 0;
+		// int emptyPosition = 0;
 		while (!canSolve) {
 			Random rand = new Random();
 			board = new Integer[9];
@@ -32,18 +33,18 @@ public class Utils {
 				while (arrIndexOf(board, tile) != -1) {
 					tile = rand.nextInt(9);
 				}
-				if (tile.equals(0))
-					emptyPosition = i;
+				// if (tile.equals(0))
+				// emptyPosition = i;
 				board[i] = tile;
 			}
 			// Runs the Puzzle classes checkSolvable function, returns true if inversions is
 			// even
 			canSolve = checkSolvable(board);
-			if (canSolve == false)
-				numFailed++;
+			// if (canSolve == false)
+			// numFailed++;
 		}
-		System.out.println("Amount of times failed: " + numFailed);
-		System.out.println("Empty Pos: " + emptyPosition);
+		// System.out.println("Amount of times failed: " + numFailed);
+		// System.out.println("Empty Pos: " + emptyPosition);
 		return board;
 		// setCurrentState(board);
 	}
@@ -241,4 +242,70 @@ public class Utils {
 		return new Integer[][] { leftState, topState, rightState, bottomState };
 
 	}
+
+	/**
+	 * Returns a random, valid neighbor state
+	 * 
+	 * @param board
+	 * @return
+	 */
+	public static Integer[] getRandomNeighbor(Integer[] board) {
+		int x = -1, y = -1;
+		int empty = getEmptyIndex(board);
+		int[] emptyCoords = index2Coords(empty);
+		while (!validCoords(x, y)) {
+			switch (rng.nextInt(4)) {
+			case 0:
+				x = emptyCoords[0] - 1;
+				y = emptyCoords[1];
+				break;
+			case 1:
+				x = emptyCoords[0];
+				y = emptyCoords[1] - 1;
+				break;
+			case 2:
+				x = emptyCoords[0] + 1;
+				y = emptyCoords[1];
+				break;
+			case 3:
+				x = emptyCoords[0];
+				y = emptyCoords[1] + 1;
+				break;
+			}
+		}
+		return swapTiles(board, empty, coords2Index(x, y));
+	}
+
+	/**
+	 * Gets a specified neighbor
+	 * 
+	 * @param board
+	 * @param neighbor 0 for left, 1 for top, 2 for right, 3 for bottom
+	 * @return
+	 */
+	public static Integer[] getNeighbor(Integer[] board, int neighbor) {
+		int x = -1, y = -1;
+		int empty = getEmptyIndex(board);
+		int[] emptyCoords = index2Coords(empty);
+		switch (neighbor) {
+		case 0:
+			x = emptyCoords[0] - 1;
+			y = emptyCoords[1];
+			break;
+		case 1:
+			x = emptyCoords[0];
+			y = emptyCoords[1] - 1;
+			break;
+		case 2:
+			x = emptyCoords[0] + 1;
+			y = emptyCoords[1];
+			break;
+		case 3:
+			x = emptyCoords[0];
+			y = emptyCoords[1] + 1;
+			break;
+		}
+		return validCoords(x, y) ? swapTiles(board, empty, coords2Index(x, y)) : null;
+	}
+
 }
